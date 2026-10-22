@@ -14,7 +14,7 @@
 </section>
 
 <section class="card">
-  <h2>Last 10 requests</h2>
+  <h2>Last {{ limit }} requests</h2>
   <table>
     <thead>
       <tr>
@@ -24,7 +24,7 @@
     </thead>
     <tbody id="log">
       {% for e in entries %}
-      <tr>
+      <tr class="req" data-time="{{ e.time }}">
         <td><code>{{ e.model or "unknown" }}</code></td>
         <td>{{ e.time }}</td>
         <td class="status {{ e.outcome }}">{{ e.status or "unknown" }}</td>
@@ -36,10 +36,19 @@
         <td>{{ pct(e.cache_hit_rate) }}</td>
         <td>{{ fmt(e.duration_ms) }} ms</td>
       </tr>
+      <tr class="detail" hidden>
+        <td colspan="10">
+          <div class="detail-block"><span class="detail-label">Prompt</span><pre>{{ e.prompt or "unknown" }}</pre></div>
+          <div class="detail-block"><span class="detail-label">Output</span><pre>{{ e.output or "unknown" }}</pre></div>
+          <p class="note">route {{ e.route_reason or "unknown" }} · outcome {{ e.outcome }} · ttft {{ fmt(e.ttft_ms) }} ms</p>
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>
   {% if not entries %}<p class="note">No requests yet. Send one: <code>POST /v1/chat/completions</code>.</p>{% endif %}
+  <p class="note">Click a row to open the full prompt and output. The log keeps the last {{ limit }} requests in the page buffer
+    (<code>ui_log.jsonl</code> holds every recorded request).</p>
   <p class="note">
     Prefill/decode split needs time-to-first-token (streaming). Decode falls back to the whole call when TTFT is
     unavailable. VRAM hit rate is the prompt-cache hit rate reported by the upstream; both stay

@@ -151,6 +151,47 @@ def test_pages_render(client):
     assert "No benchmark results yet" in client.get("/benchmark").text
 
 
+def test_prompt_text_reads_multimodal_content():
+    messages = [
+        {"role": "user", "content": [{"type": "text", "text": "Read the sign"}, {"type": "image_url", "image_url": {"url": "https://test/x.jpg"}}]},
+        {"role": "system", "content": "be brief"},
+    ]
+    assert server.prompt_text(messages) == "Read the sign be brief"
+    assert server.prompt_text([{"role": "user", "content": "plain"}]) == "plain"
+    assert server.prompt_text([{"role": "user", "content": [{"type": "image_url"}]}]) == ""
+
+
+def test_home_page_keeps_last_100_and_renders_detail(client):
+    prompt, output = "x" * 800, "y" * 800
+    for i in range(120):
+        server.LOG.record(
+            LogEntry(
+                time=f"2026-10-23T00:00:{i:02d}Z",
+                model="groq/x",
+                status="ok",
+                prompt=prompt,
+                output=output,
+                outcome="pass",
+                duration_ms=100,
+                route_reason="quality",
+            )
+        )
+
+    assert len(server.LOG.entries) == 100  # the buffer keeps the last 100 requests
+    assert len(client.get("/api/log").json()["entries"]) == 100
+    assert len(client.get("/api/log?limit=5").json()["entries"]) == 5
+
+    page = client.get("/").text
+    assert "Last 100 requests" in page
+    assert 'class="detail"' in page and 'class="detail-block"' in page
+    assert prompt in page and output in page  # the detail view shows the stored text, not the clipped cell
+    assert page.count('class="detail"') == 100
+
+    # The limit is still adjustable and capped by the buffer size.
+    assert client.get("/?limit=10").text.count('class="detail"') == 10
+    assert client.get("/?limit=9999").text.count('class="detail"') == 100
+
+
 def test_chat_records_the_request(client):
     response = client.post("/v1/chat/completions", json={"model": "auto", "messages": [{"role": "user", "content": "Reply with exactly: PONG"}]})
     assert response.status_code == 200

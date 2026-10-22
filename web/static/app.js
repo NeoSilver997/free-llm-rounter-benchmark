@@ -1,20 +1,54 @@
 const show = (v) => (v === null || v === undefined || v === "" ? "unknown" : typeof v === "number" ? v.toFixed(1) : String(v));
 const percent = (v) => (v === null || v === undefined ? "unknown" : (v * 100).toFixed(1) + "%");
 
+const LOG_LIMIT = 100;  // requests kept in the page buffer, matching RequestLog.max_entries
+
 const COLUMNS = [
   "model", "time", "status", "prompt", "reused", "output",
   "prefill_tps", "decode_tps", "cache_hit_rate", "duration",
 ];
 
+function detailRow(entry) {
+  const tr = document.createElement("tr");
+  tr.className = "detail";
+  tr.hidden = true;
+
+  const td = document.createElement("td");
+  td.colSpan = COLUMNS.length;
+
+  for (const [label, value] of [["Prompt", entry.prompt], ["Output", entry.output]]) {
+    const block = document.createElement("div");
+    block.className = "detail-block";
+    const name = document.createElement("span");
+    name.className = "detail-label";
+    name.textContent = label;
+    const text = document.createElement("pre");
+    text.textContent = value || "unknown";
+    block.append(name, text);
+    td.appendChild(block);
+  }
+
+  const meta = document.createElement("p");
+  meta.className = "note";
+  meta.textContent = `route ${entry.route_reason || "unknown"} · outcome ${entry.outcome} · ttft ${show(entry.ttft_ms)} ms`;
+  td.appendChild(meta);
+
+  tr.appendChild(td);
+  return tr;
+}
+
 async function refreshLog() {
   const tbody = document.getElementById("log");
   if (!tbody) return;
 
-  const data = await fetch("/api/log?limit=10").then((r) => r.json());
+  const data = await fetch(`/api/log?limit=${LOG_LIMIT}`).then((r) => r.json());
   tbody.innerHTML = "";
 
   for (const e of data.entries) {
     const tr = document.createElement("tr");
+    tr.className = "req";
+    tr.dataset.time = e.time;
+
     const cells = [
       e.model, e.time, e.status, e.prompt, show(e.reused), e.output,
       show(e.prefill_tps), show(e.decode_tps), percent(e.cache_hit_rate), `${show(e.duration_ms)} ms`,
@@ -26,7 +60,8 @@ async function refreshLog() {
       td.textContent = value || "unknown";
       tr.appendChild(td);
     });
-    tbody.appendChild(tr);
+
+    tbody.append(tr, detailRow(e));
   }
 }
 
@@ -176,6 +211,13 @@ async function saveConfig() {
 if (document.getElementById("log")) {
   refreshLog();
   setInterval(refreshLog, 5000);
+
+  document.getElementById("log").addEventListener("click", (event) => {
+    const row = event.target.closest("tr.req");
+    if (!row) return;
+    const detail = row.nextElementSibling;
+    if (detail && detail.classList.contains("detail")) detail.hidden = !detail.hidden;
+  });
 }
 
 const saveButton = document.getElementById("save");

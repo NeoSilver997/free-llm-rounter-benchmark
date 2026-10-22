@@ -55,6 +55,12 @@ tr.frontier td { background: rgba(90, 169, 230, 0.08); }
 
 .clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tr[hidden] { display: none; }
+tr.req { cursor: pointer; }
+tr.req:hover td { background: rgba(90, 169, 230, 0.06); }
+tr.detail td { background: #101417; }
+.detail-block { margin-bottom: 0.5rem; }
+.detail-label { display: block; color: var(--muted); margin-bottom: 0.25rem; }
+.detail pre { margin: 0; font: inherit; white-space: pre-wrap; word-break: break-word; }
 td input:not([type="checkbox"]) { width: 100%; min-width: 0; }
 section.group { margin-top: 1.25rem; }
 section.group[hidden] { display: none; }

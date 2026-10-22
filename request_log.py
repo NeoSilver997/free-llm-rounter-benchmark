@@ -9,7 +9,7 @@ from routing.health import percentile
 from telemetry import ALLOWED_OUTCOMES
 
 DEFAULT_LOG = Path("ui_log.jsonl")
-MAX_ENTRIES = 200
+MAX_ENTRIES = 100
 
 # Columns shown on the home page. Values that cannot be measured stay None and render as 'unknown'.
 COLUMNS = (
@@ -24,7 +24,7 @@ COLUMNS = (
     "cache_hit_rate",
     "duration_ms",
 )
-MAX_TEXT = 500
+MAX_TEXT = 2000  # the detail view shows the stored text, so the cap decides what is kept
 
 
 def now_iso() -> str:

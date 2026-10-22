@@ -101,6 +101,18 @@ def usage_of(usage: dict) -> tuple[int, int, int | None]:
     return prompt, completion, int(cached) if cached else None
 
 
+def prompt_text(messages: list) -> str:
+    """Text parts of the messages; multimodal content is a list of typed parts."""
+    parts = []
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, list):
+            parts.append(" ".join(str(p.get("text", "")) for p in content if isinstance(p, dict) and p.get("type") == "text"))
+        else:
+            parts.append(str(content or ""))
+    return " ".join(p for p in parts if p)
+
+
 def answer_of(raw: dict) -> str:
     choices = raw.get("choices") or []
     if not choices:
@@ -151,7 +163,7 @@ def finalize(entry: LogEntry, decision: RouteDecision, usage: dict, ttft_ms: int
 async def chat_completions(request: Request):
     payload = await request.json()
     messages = payload.get("messages") or []
-    prompt = " ".join(str(m.get("content", "")) for m in messages)
+    prompt = prompt_text(messages)
     requested = str(payload.get("model", "auto") or "auto")
     decision = route(prompt, requested, str(payload.get("policy", "weighted")))
     entry = LogEntry(
@@ -225,12 +237,14 @@ async def stream_and_log(adapter, decision, body: dict, entry: LogEntry, started
 
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request, limit: int = 10):
+async def home(request: Request, limit: int = 100):
+    limit = min(max(1, limit), LOG.max_entries)
     return templates.TemplateResponse(
         request,
         "home.html",
         {
             "entries": LOG.recent(limit),
+            "limit": limit,
             "stats": LOG.stats(),
             "config": CONFIG,
             "selected": CONFIG.selected_models(),
@@ -384,8 +398,8 @@ def mask(value: str) -> str:
 
 
 @app.get("/api/log")
-async def api_log(limit: int = 10):
-    return {"stats": LOG.stats(), "entries": [e.as_dict() for e in LOG.recent(limit)]}
+async def api_log(limit: int = 100):
+    return {"stats": LOG.stats(), "entries": [e.as_dict() for e in LOG.recent(min(max(1, limit), LOG.max_entries))]}
 
 
 @app.get("/api/config")
