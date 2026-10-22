@@ -1,0 +1,112 @@
+[
+  {
+    "id": "text-pong",
+    "task_type": "text",
+    "endpoint": "chat",
+    "prompt": "Reply with exactly: PONG",
+    "checks": [{"type": "exact", "expected": "PONG"}],
+    "timeout_s": 60,
+    "scored": true
+  },
+  {
+    "id": "text-sentence",
+    "task_type": "text",
+    "endpoint": "chat",
+    "prompt": "Reply in one English sentence about the sea. No other text.",
+    "checks": [{"type": "format", "rules": {"max_sentences": 1, "language": "en", "must_not_contain": ["sure", "certainly"]}}],
+    "timeout_s": 60,
+    "scored": true
+  },
+  {
+    "id": "text-count",
+    "task_type": "text",
+    "endpoint": "chat",
+    "prompt": "List exactly 3 primary colours, one per line, nothing else.",
+    "checks": [{"type": "count", "n": 3}, {"type": "contains", "needles": ["red", "blue", "yellow"]}],
+    "timeout_s": 60,
+    "scored": true
+  },
+  {
+    "id": "text-json",
+    "task_type": "text",
+    "endpoint": "chat",
+    "prompt": "Return only a JSON object with key answer (string) for: what is 2 plus 2?",
+    "checks": [{"type": "json_schema", "schema": {"type": "object", "required": ["answer"], "properties": {"answer": {"type": "string"}}}}],
+    "timeout_s": 60,
+    "scored": true
+  },
+  {
+    "id": "reason-bat",
+    "task_type": "reasoning",
+    "endpoint": "chat",
+    "prompt": "A bat and a ball cost 1.10 in total. The bat costs 1.00 more than the ball. Answer with the ball price in cents as a number.",
+    "checks": [{"type": "numeric", "expected": 5}],
+    "timeout_s": 60,
+    "scored": true
+  },
+  {
+    "id": "reason-multiply",
+    "task_type": "reasoning",
+    "endpoint": "chat",
+    "prompt": "What is 17 times 23? Reply with the number only.",
+    "checks": [{"type": "numeric", "expected": 391}],
+    "timeout_s": 60,
+    "scored": true
+  },
+  {
+    "id": "code-exec",
+    "task_type": "code",
+    "endpoint": "chat",
+    "prompt": "Write a Python program that reads an integer from stdin and prints its square. Output only a code block.",
+    "stdin": "7",
+    "checks": [{"type": "python_exec", "expected_stdout": "49", "timeout": 10}],
+    "timeout_s": 60,
+    "scored": true
+  },
+  {
+    "id": "code-regex",
+    "task_type": "code",
+    "endpoint": "chat",
+    "prompt": "Output a single Python regex, in a code block, that matches a 5-digit US ZIP code.",
+    "checks": [{"type": "regex", "pattern": "\\d{5}"}],
+    "timeout_s": 60,
+    "scored": true
+  },
+  {
+    "id": "vision-colour",
+    "task_type": "vision",
+    "endpoint": "chat",
+    "prompt": "Look at the attached image and reply with one word naming its dominant colour.",
+    "image": "sample.png",
+    "checks": [{"type": "contains", "needles": ["red"]}],
+    "timeout_s": 90,
+    "scored": true
+  },
+  {
+    "id": "emb-ocean",
+    "task_type": "embeddings",
+    "endpoint": "embeddings",
+    "prompt": "ocean",
+    "checks": [{"type": "json_schema", "schema": {"type": "object", "required": ["data"], "properties": {"data": {"type": "array"}}}}],
+    "timeout_s": 60,
+    "scored": true
+  },
+  {
+    "id": "rerank-order",
+    "task_type": "rerank",
+    "endpoint": "chat",
+    "prompt": "Rank these three passages by relevance to 'battery lifespan', most relevant first, one index per line: 1) Lithium cells lose capacity over cycles. 2) The weather is nice today. 3) A phone battery lasts about 500 charge cycles.",
+    "checks": [{"type": "count", "n": 3}, {"type": "contains", "needles": ["1", "3"]}],
+    "timeout_s": 60,
+    "scored": true
+  },
+  {
+    "id": "audio-word",
+    "task_type": "audio",
+    "endpoint": "chat",
+    "prompt": "Reply with one word: HELLO.",
+    "checks": [{"type": "exact", "expected": "hello"}],
+    "timeout_s": 60,
+    "scored": true
+  }
+]
