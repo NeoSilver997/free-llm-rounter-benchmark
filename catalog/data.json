@@ -808,8 +808,16 @@
           "rateLimit": "40 RPM, 10,000 RPD"
         },
         {
+          "id": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+          "name": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+          "context": "128K",
+          "maxOutput": "16K",
+          "modality": "Text, Image",
+          "rateLimit": "40 RPM, 10,000 RPD"
+        },
+        {
           "id": null,
-          "name": "+ 92 more models",
+          "name": "+ 91 more models",
           "context": "Varies",
           "maxOutput": "Varies",
           "modality": "Text, Image, Video, Speech, Embeddings",
