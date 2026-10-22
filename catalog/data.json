@@ -824,39 +824,23 @@
       "flag": "🇺🇸",
       "url": "https://ollama.com/settings/keys",
       "baseUrl": "https://ollama.com/api",
-      "description": "Free tier with usage limits. 16 cloud model families from the Ollama library. OpenAI SDK-compatible via https://ollama.com/v1.",
+      "description": "Free tier with usage limits. 7 free cloud models; the rest of the Ollama library is paid per token. OpenAI SDK-compatible via https://ollama.com/v1.",
       "footnoteRef": 3,
       "models": [
         {
-          "id": "deepseek-v4-pro",
-          "name": "deepseek-v4-pro",
+          "id": "beam",
+          "name": "beam",
           "context": "1M",
           "maxOutput": "Model-dependent",
           "modality": "Text",
           "rateLimit": "Session/weekly limits (unpublished)"
         },
         {
-          "id": "deepseek-v4-flash",
-          "name": "deepseek-v4-flash",
-          "context": "1M",
+          "id": "gemma4:31b",
+          "name": "gemma4:31b",
+          "context": "256K",
           "maxOutput": "Model-dependent",
-          "modality": "Text",
-          "rateLimit": "Session/weekly limits (unpublished)"
-        },
-        {
-          "id": "minimax-m3",
-          "name": "minimax-m3",
-          "context": "512K",
-          "maxOutput": "Model-dependent",
-          "modality": "Text",
-          "rateLimit": "Session/weekly limits (unpublished)"
-        },
-        {
-          "id": "kimi-k3",
-          "name": "kimi-k3",
-          "context": "1M",
-          "maxOutput": "Model-dependent",
-          "modality": "Text",
+          "modality": "Text + Image",
           "rateLimit": "Session/weekly limits (unpublished)"
         },
         {
@@ -876,34 +860,26 @@
           "rateLimit": "Session/weekly limits (unpublished)"
         },
         {
+          "id": "nemotron-3-nano:30b",
+          "name": "nemotron-3-nano:30b",
+          "context": "1M",
+          "maxOutput": "Model-dependent",
+          "modality": "Text",
+          "rateLimit": "Session/weekly limits (unpublished)"
+        },
+        {
+          "id": "nemotron-3-super",
+          "name": "nemotron-3-super",
+          "context": "256K",
+          "maxOutput": "Model-dependent",
+          "modality": "Text",
+          "rateLimit": "Session/weekly limits (unpublished)"
+        },
+        {
           "id": "nemotron-3-ultra",
           "name": "nemotron-3-ultra",
           "context": "262K",
           "maxOutput": "Model-dependent",
-          "modality": "Text",
-          "rateLimit": "Session/weekly limits (unpublished)"
-        },
-        {
-          "id": "mistral-large-3:675b",
-          "name": "mistral-large-3:675b",
-          "context": "256K",
-          "maxOutput": "Model-dependent",
-          "modality": "Text",
-          "rateLimit": "Session/weekly limits (unpublished)"
-        },
-        {
-          "id": "qwen3.5:397b",
-          "name": "qwen3.5:397b",
-          "context": "256K",
-          "maxOutput": "Model-dependent",
-          "modality": "Text",
-          "rateLimit": "Session/weekly limits (unpublished)"
-        },
-        {
-          "id": null,
-          "name": "+ 7 more cloud models",
-          "context": "Varies",
-          "maxOutput": "Varies",
           "modality": "Text",
           "rateLimit": "Session/weekly limits (unpublished)"
         }
