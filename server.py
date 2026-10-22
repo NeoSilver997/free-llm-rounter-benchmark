@@ -76,6 +76,7 @@ CTX.metrics = load_scores()
 def config_keys() -> dict[str, str]:
     """Env keys are the default; runtime keys set from the UI override them."""
     keys = dict(env_keys())
+    keys.update({p: v for p, v in CONFIG.provider_keys.items() if v})
     for model in CONFIG.models:
         if model.api_key:
             keys[model.provider] = model.api_key
@@ -169,9 +170,10 @@ async def chat_completions(request: Request):
         return error_json(400, "no routable model", decision.excluded)
 
     adapter = adapter_for(decision.provider, CONFIG.key_for(decision.key), CLIENT, base=CONFIG.host_for(decision.key))
-    body = {"messages": messages}
-    if payload.get("max_tokens"):
-        body["max_tokens"] = payload["max_tokens"]
+    # Everything except the gateway-controlled fields is passed through, so optional
+    # SDK params (temperature, top_p, seed, chat_template_kwargs, ...) reach the upstream.
+    body = {k: v for k, v in payload.items() if k not in {"model", "messages", "stream", "policy"}}
+    body["messages"] = messages
     started = time.perf_counter()
 
     if payload.get("stream"):

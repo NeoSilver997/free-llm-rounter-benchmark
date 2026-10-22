@@ -96,11 +96,13 @@ def test_request_log_ring_buffer_and_round_trip(tmp_path):
 
 class StubAdapter:
     provider = "groq"
+    sent: dict = {}
 
     def supports_stream(self) -> bool:
         return True
 
     async def chat(self, model: str, payload: dict, stream: bool) -> dict:
+        StubAdapter.sent = payload
         await asyncio.sleep(0.05)  # nonzero duration so decode t/s is measurable
         return {
             "id": "1",
@@ -164,12 +166,36 @@ def test_chat_records_the_request(client):
     assert entry["route_reason"] == "explicit"  # configured keyword 'pong' wins
 
 
+def test_optional_params_are_forwarded_to_the_upstream(client):
+    client.post("/v1/chat/completions", json={
+        "model": "auto",
+        "messages": [{"role": "user", "content": "Reply with exactly: PONG"}],
+        "temperature": 1,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "seed": 42,
+        "chat_template_kwargs": {"enable_thinking": True},
+    })
+    sent = StubAdapter.sent
+    assert sent["seed"] == 42 and sent["top_p"] == 0.95
+    assert sent["chat_template_kwargs"] == {"enable_thinking": True}
+    # Gateway-controlled fields stay with the router and are not forwarded as request params.
+    assert "model" not in sent and "policy" not in sent
+
+
 def test_no_key_is_excluded_before_scoring(client, monkeypatch):
     monkeypatch.delenv("ROUTER_KEY_GROQ")
     client.post("/api/config", json={"models": [{"model_key": groq_key(), "keyword": ""}]})
     response = client.post("/v1/chat/completions", json={"model": "auto", "messages": [{"role": "user", "content": "hello"}]})
     assert response.status_code == 400
     assert response.json()["error"]["excluded"][groq_key()] == "no_key"
+
+
+def test_runtime_provider_key_counts_for_routing(client, monkeypatch):
+    monkeypatch.delenv("ROUTER_KEY_GROQ")
+    client.post("/api/config", json={"providers": [{"provider": "groq", "api_key": "runtime-key"}]})
+    response = client.post("/v1/chat/completions", json={"model": "auto", "messages": [{"role": "user", "content": "hello"}]})
+    assert response.status_code == 200
 
 
 def test_host_override_reaches_the_adapter():
