@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import csv
 import hashlib
 import json
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 
@@ -12,7 +14,7 @@ import httpx
 
 from benchmark.checks import Task, run_check
 from catalog.loader import load_catalog, routable_models
-from catalog.rate_limits import effective_rpm, parse_rate_limit
+from catalog.rate_limits import effective_rpm, parse_rate_limit, rpm_from_tpm
 from catalog.schema import Catalog, ModelEntry
 from catalog.task_types import model_task_types
 from providers.registry import adapter_for
@@ -20,6 +22,11 @@ from routing.constraints import ANONYMOUS_PROVIDERS
 
 OUTCOMES = ("pass", "fail", "error", "skipped")
 ERROR_CLASSES = ("ok", "429", "timeout", "auth", "schema", "unsupported", "server")
+
+
+def attempt_time() -> str:
+    """Attempt timestamp as plain local text, so results.csv stays readable by hand."""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 @dataclass
@@ -33,6 +40,9 @@ class BenchOptions:
     dry_run: bool = False
     min_n: int = 5
     out_dir: Path = Path("results")
+    attempt_all: bool = False  # keyless models are attempted anyway, so coverage records the auth failure
+    tpm: dict[str, int] = field(default_factory=dict)  # per-provider token budget
+    tokens_per_request: int = 600
 
 
 @dataclass
@@ -60,6 +70,7 @@ class Row:
     error_class: str = "ok"
     answer_hash: str = ""
     rate_limit: str = ""
+    run_at: str = ""
 
     @property
     def model_key(self) -> str:
@@ -82,7 +93,39 @@ class Row:
             "error_class": self.error_class,
             "answer_hash": self.answer_hash,
             "rate_limit": self.rate_limit,
+            "run_at": self.run_at,
         }
+
+
+def read_rows(path: Path | str) -> list[Row]:
+    """Attempt rows from results.csv, so a run appends to the history instead of replacing it."""
+    path = Path(path)
+    if not path.exists():
+        return []
+
+    rows: list[Row] = []
+    with path.open(encoding="utf-8") as fh:
+        for item in csv.DictReader(fh):
+            rows.append(
+                Row(
+                    provider=item["provider"],
+                    model=item["model_key"].split("/", 1)[1],
+                    task_id=item["task_id"],
+                    task_type=item["task_type"],
+                    outcome=item["outcome"],
+                    latency_ms=int(item["latency_ms"]) if item["latency_ms"] else None,
+                    ttft_ms=int(item["ttft_ms"]) if item["ttft_ms"] else None,
+                    prompt_tokens=int(item["prompt_tokens"] or 0),
+                    completion_tokens=int(item["completion_tokens"] or 0),
+                    tokens_per_sec=float(item["tokens_per_sec"]) if item["tokens_per_sec"] else None,
+                    http_status=int(item["http_status"]) if item["http_status"] else None,
+                    error_class=item["error_class"] or "ok",
+                    answer_hash=item["answer_hash"],
+                    rate_limit=item["rate_limit"],
+                    run_at=item.get("run_at", ""),
+                )
+            )
+    return rows
 
 
 def plan(catalog: Catalog, tasks: list[Task], opts: BenchOptions) -> list[PlannedCall]:
@@ -102,7 +145,7 @@ def plan(catalog: Catalog, tasks: list[Task], opts: BenchOptions) -> list[Planne
                 continue
 
             reason = "run"
-            if not opts.keys.get(model.provider) and model.provider not in ANONYMOUS_PROVIDERS:
+            if not opts.keys.get(model.provider) and model.provider not in ANONYMOUS_PROVIDERS and not opts.attempt_all:
                 reason = "skipped: no key"
             elif per_provider.get(model.provider, 0) >= opts.max_requests:
                 reason = "skipped: provider request cap"
@@ -125,8 +168,17 @@ def task_content(task: Task):
     ]
 
 
-async def run_one(client, provider: str, model: ModelEntry, task: Task, key: str = "") -> Row:
-    adapter = adapter_for(provider, key, client)
+async def run_one(
+    client,
+    provider: str,
+    model: ModelEntry,
+    task: Task,
+    key: str = "",
+    max_tokens: int = 512,
+    timeout: float = 60.0,
+    base: str = "",
+) -> Row:
+    adapter = adapter_for(provider, key, client, base=base, timeout=timeout)
     row = Row(
         provider=provider,
         model=model.id or "",
@@ -134,6 +186,7 @@ async def run_one(client, provider: str, model: ModelEntry, task: Task, key: str
         task_type=task.task_type,
         outcome="skipped",
         rate_limit=model.rateLimit or "",
+        run_at=attempt_time(),
     )
 
     started = perf_counter()
@@ -144,10 +197,13 @@ async def run_one(client, provider: str, model: ModelEntry, task: Task, key: str
         else:
             raw = await adapter.chat(
                 model.id or "",
-                {"messages": [{"role": "user", "content": task_content(task)}], "max_tokens": 512},
+                {"messages": [{"role": "user", "content": task_content(task)}], "max_tokens": max_tokens},
                 stream=False,
             )
-            answer = raw.get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = raw.get("choices", [{}])[0].get("message", {}).get("content")
+            # Providers can return null content (reasoning-only or tool-call replies), which is
+            # data to record, not a crash.
+            answer = content if isinstance(content, str) else (json.dumps(content) if content else "")
     except Exception as exc:  # provider errors are data, not crashes
         row.outcome = "error"
         row.latency_ms = int((perf_counter() - started) * 1000)
@@ -156,7 +212,7 @@ async def run_one(client, provider: str, model: ModelEntry, task: Task, key: str
         return row
 
     row.latency_ms = int((perf_counter() - started) * 1000)
-    usage = raw.get("usage", {})
+    usage = raw.get("usage") or {}
     row.prompt_tokens = usage.get("prompt_tokens", 0)
     row.completion_tokens = usage.get("completion_tokens", 0)
     row.tokens_per_sec = round(row.completion_tokens / (row.latency_ms / 1000), 1) if row.latency_ms else None
@@ -175,15 +231,24 @@ async def run(catalog: Catalog, tasks: list[Task], opts: BenchOptions) -> list[R
     models = {m.key: m for m in routable_models(catalog)}
     semaphore = asyncio.Semaphore(max(1, opts.concurrency))
     answers: list[Row] = []
+    total = len(calls)
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         async def worker(provider: str, group: list[PlannedCall]) -> None:
             async with semaphore:
+                # Pacing only where quota is actually consumed; keyless attempts fail fast.
+                first = models[f"{group[0].provider}/{group[0].model}"]
+                budget = rpm_from_tpm(opts.tpm.get(provider), opts.tokens_per_request)
+                rpm = min(effective_rpm(parse_rate_limit(first.rateLimit), cap=opts.max_requests), budget or opts.max_requests)
+                delay = 60.0 / rpm if opts.keys.get(provider) or provider in ANONYMOUS_PROVIDERS else 0.0
+                print(f"start {provider}: {len(group)} calls at {rpm} rpm -> {delay:.1f}s pacing", flush=True)
+
                 for call in group:
                     model = models[f"{call.provider}/{call.model}"]
                     row = await run_one(client, provider, model, next(t for t in tasks if t.id == call.task_id), opts.keys.get(provider, ""))
                     answers.append(row)
-                    await asyncio.sleep(0.1)
+                    print(f"  [{len(answers)}/{total}] {row.model_key} {row.outcome} {row.error_class} {row.latency_ms} ms", flush=True)
+                    await asyncio.sleep(delay or 0.1)
 
         await asyncio.gather(*(worker(p, g) for p, g in sorted(by_provider.items())))
 

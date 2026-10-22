@@ -24,6 +24,7 @@ CSV_COLUMNS = (
     "error_class",
     "answer_hash",
     "rate_limit",
+    "run_at",
 )
 
 

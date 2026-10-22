@@ -10,6 +10,10 @@ CHECK_TYPES = frozenset(
     {"exact", "contains", "regex", "json_schema", "numeric", "python_exec", "count", "format"}
 )
 
+# The reachability probe: one tiny chat request with no checks, so it only records
+# whether the model answers and how long it took. Shared by cli.py probe and the UI Retest.
+PROBE_PROMPT = "Reply with the single word ok."
+
 
 @dataclass
 class Task:
