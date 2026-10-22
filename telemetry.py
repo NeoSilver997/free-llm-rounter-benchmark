@@ -4,8 +4,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from routing.health import percentile
-
+# The allowlists must be defined before routing is imported: routing/__init__ imports
+# decision, which imports this module, so importing routing.health first would deadlock.
 ALLOWED_REASONS = frozenset(
     {
         "explicit",
@@ -29,6 +29,8 @@ DEFAULT_LOG = Path("routes.jsonl")
 
 # Content-free telemetry: no prompts, responses, identifiers or paths.
 FIELDS = ("route", "reason", "latency_ms", "outcome")
+
+from routing.health import percentile  # noqa: E402 - must stay after the allowlists
 
 
 def log_route(decision, latency_ms: int, outcome: str, path: Path | str = DEFAULT_LOG) -> None:
