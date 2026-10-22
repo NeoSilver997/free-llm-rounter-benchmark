@@ -94,13 +94,15 @@ def normalize_openai_response(raw: dict) -> dict:
     choices = []
     for choice in raw.get("choices", []):
         message = choice.get("message") or {"role": "assistant", "content": choice.get("text", "")}
-        choices.append(
-            {
-                "index": choice.get("index", 0),
-                "message": {"role": message.get("role", "assistant"), "content": message.get("content", "")},
-                "finish_reason": choice.get("finish_reason"),
-            }
-        )
+        entry = {
+            "index": choice.get("index", 0),
+            "message": {"role": message.get("role", "assistant"), "content": message.get("content", "")},
+            "finish_reason": choice.get("finish_reason"),
+        }
+        # Thinking models put the chain of thought in reasoning_content; keep it when present.
+        if message.get("reasoning_content"):
+            entry["message"]["reasoning_content"] = message["reasoning_content"]
+        choices.append(entry)
     prompt = int(usage.get("prompt_tokens", 0) or 0)
     completion = int(usage.get("completion_tokens", 0) or 0)
     return {

@@ -9,6 +9,7 @@ from benchmark.metrics import ModelMetrics, aggregate, pareto_frontier, win_rate
 from benchmark.runner import BenchOptions, Row, min_n_gate, plan, task_content
 from catalog.loader import load_catalog, routable_models
 from providers.ollama import normalize_ollama_response, parse_ollama_body
+from providers.openai_adapter import normalize_openai_response
 from routing.budget import Budget
 from routing.policies import POLICIES, RoutingContext
 from routing.request import RoutingRequest
@@ -350,3 +351,15 @@ def test_ollama_body_merges_newline_delimited_chunks():
     raw = normalize_ollama_response(parse_ollama_body(body))
     assert raw["choices"][0]["message"]["content"] == "ok"
     assert raw["usage"] == {"prompt_tokens": 18, "completion_tokens": 4, "total_tokens": 22}
+
+
+def test_normalize_keeps_reasoning_content():
+    raw = {
+        "choices": [{"message": {"role": "assistant", "content": "red", "reasoning_content": "the sign is an octagon"}}],
+        "usage": {"prompt_tokens": 1186, "completion_tokens": 147, "completion_tokens_details": {"reasoning_tokens": 132}},
+    }
+    out = normalize_openai_response(raw)
+    assert out["choices"][0]["message"]["reasoning_content"] == "the sign is an octagon"
+    assert out["usage"]["total_tokens"] == 1333
+    # A model that does not think has no reasoning field to preserve.
+    assert "reasoning_content" not in normalize_openai_response({"choices": [{"message": {"content": "ok"}}]})["choices"][0]["message"]
