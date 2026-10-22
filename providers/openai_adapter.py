@@ -6,7 +6,7 @@ from typing import AsyncIterator
 
 import httpx
 
-from providers.base import ProviderError, RETRY_STATUS, classify_status, retry_after
+from providers.base import MAX_RETRY_WAIT, ProviderError, RETRY_STATUS, classify_status, retry_after
 from routing.constraints import provider_index
 
 
@@ -37,9 +37,9 @@ class OpenAIAdapter:
         return normalize_openai_response(raw)
 
     async def _stream(self, model: str, payload: dict) -> AsyncIterator[dict]:
-        async with self.client.stream(
-            "POST", self.url("chat/completions"), json={"model": model, **payload}, headers=self.headers()
-        ) as resp:
+        # The upstream needs stream=true in the body; usage only appears in the final chunk with include_usage.
+        body = {"model": model, "stream": True, "stream_options": {"include_usage": True}, **payload}
+        async with self.client.stream("POST", self.url("chat/completions"), json=body, headers=self.headers()) as resp:
             if resp.status_code >= 400:
                 await resp.aread()
                 raise ProviderError(
@@ -61,6 +61,10 @@ class OpenAIAdapter:
         raw = await self._get("models")
         return [item.get("id", "") for item in raw.get("data", [])]
 
+    def parse(self, text: str) -> dict:
+        """Body parser hook: providers that answer with newline-delimited chunks override it."""
+        return json.loads(text)
+
     async def _post(self, path: str, payload: dict) -> dict:
         for attempt in range(2):
             try:
@@ -68,9 +72,11 @@ class OpenAIAdapter:
             except httpx.TimeoutException as exc:
                 raise ProviderError("timeout", None, "timeout") from exc
             if resp.status_code < 400:
-                return resp.json()
+                return self.parse(resp.text)
             if attempt == 0 and resp.status_code in RETRY_STATUS:
-                await asyncio.sleep(retry_after(resp.headers))
+                wait = min(retry_after(resp.headers), MAX_RETRY_WAIT)
+                print(f"  retry {self.provider}/{payload.get('model', '')} in {wait:.1f}s (status {resp.status_code})", flush=True)
+                await asyncio.sleep(wait)
                 continue
             raise ProviderError(resp.text[:200], resp.status_code, classify_status(resp.status_code), retry_after(resp.headers))
         raise ProviderError("retry exhausted", None, "error")

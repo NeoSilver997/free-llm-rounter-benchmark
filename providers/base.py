@@ -5,6 +5,7 @@ from typing import AsyncIterator, Protocol
 
 ERROR_CLASSES = frozenset({"ok", "429", "timeout", "auth", "schema", "unsupported", "server"})
 RETRY_STATUS = frozenset({429, 500, 502, 503})
+MAX_RETRY_WAIT = 10.0  # a huge Retry-After would stall a sweep, so cap the single retry
 
 
 def classify_status(status: int | None) -> str:

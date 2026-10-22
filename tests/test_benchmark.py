@@ -8,6 +8,7 @@ from benchmark.checks import Task, load_tasks, run_check
 from benchmark.metrics import ModelMetrics, aggregate, pareto_frontier, win_rate_at_budget
 from benchmark.runner import BenchOptions, Row, min_n_gate, plan, task_content
 from catalog.loader import load_catalog, routable_models
+from providers.ollama import normalize_ollama_response, parse_ollama_body
 from routing.budget import Budget
 from routing.policies import POLICIES, RoutingContext
 from routing.request import RoutingRequest
@@ -338,3 +339,14 @@ def test_report_writers_and_scores_round_trip(tmp_path):
     html = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert "provider_api" in html and "Policies" in html and "win rate at budget" in html
     assert "coverage only" in html and "ranked" in html
+
+
+def test_ollama_body_merges_newline_delimited_chunks():
+    body = (
+        '{"model":"gpt-oss:20b","message":{"role":"assistant","content":"ok"},"done":false}\n'
+        '{"model":"gpt-oss:20b","message":{"role":"assistant","content":""},"done":true,'
+        '"done_reason":"stop","prompt_eval_count":18,"eval_count":4}'
+    )
+    raw = normalize_ollama_response(parse_ollama_body(body))
+    assert raw["choices"][0]["message"]["content"] == "ok"
+    assert raw["usage"] == {"prompt_tokens": 18, "completion_tokens": 4, "total_tokens": 22}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import AsyncIterator
 
 from providers.openai_adapter import OpenAIAdapter, normalize_openai_response
@@ -13,6 +14,27 @@ def to_ollama_payload(payload: dict) -> dict:
     if payload.get("temperature") is not None:
         out.setdefault("options", {})["temperature"] = payload["temperature"]
     return out
+
+
+def parse_ollama_body(text: str) -> dict:
+    """Ollama replies with newline-delimited chunks even when stream is not requested.
+
+    Content is spread over the chunks and usage only appears in the last one, so a single
+    json.loads on the body fails; merge the chunks before normalizing.
+    """
+    chunks = [json.loads(line) for line in text.splitlines() if line.strip()]
+    if not chunks:
+        return {}
+    last = chunks[-1]
+    content = "".join(chunk.get("message", {}).get("content", "") for chunk in chunks)
+    return {
+        "id": last.get("id", ""),
+        "model": last.get("model", ""),
+        "message": {"role": last.get("message", {}).get("role", "assistant"), "content": content},
+        "done_reason": last.get("done_reason"),
+        "prompt_eval_count": last.get("prompt_eval_count", 0),
+        "eval_count": last.get("eval_count", 0),
+    }
 
 
 def normalize_ollama_response(raw: dict) -> dict:
@@ -34,6 +56,9 @@ class OllamaAdapter(OpenAIAdapter):
 
     def supports_stream(self) -> bool:
         return False
+
+    def parse(self, text: str) -> dict:
+        return parse_ollama_body(text)
 
     async def chat(self, model: str, payload: dict, stream: bool = False) -> dict:
         raw = await self._post("chat", {"model": model, **to_ollama_payload(payload)})

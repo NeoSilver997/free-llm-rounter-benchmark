@@ -15,7 +15,14 @@ ADAPTERS: dict[str, type[OpenAIAdapter]] = {
 }
 
 
-def adapter_for(provider: str, key: str, client: httpx.AsyncClient) -> ProviderClient:
-    """Registry keyed by provider slug; everything else is OpenAI-compatible."""
-    cls = ADAPTERS.get(provider, OpenAIAdapter)
-    return cls(provider, key, client)
+def adapter_for(
+    provider: str, key: str, client: httpx.AsyncClient, base: str = "", timeout: float = 60.0
+) -> ProviderClient:
+    """Registry keyed by provider slug; everything else is OpenAI-compatible.
+
+    `base` overrides the catalog baseUrl (the per-model host override in the UI).
+    """
+    adapter = ADAPTERS.get(provider, OpenAIAdapter)(provider, key, client, timeout)
+    if base:
+        adapter.base = base.rstrip("/")
+    return adapter
