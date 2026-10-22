@@ -65,8 +65,9 @@ def resolve_model(catalog: Catalog, model: str) -> list[ModelEntry]:
 
     if "/" in model:
         first, rest = model.split("/", 1)
-        if first in providers or (prefix := unique_prefix(first, providers)):
-            hit = index.get(f"{prefix or first}/{rest}")
+        prefix = first if first in providers else unique_prefix(first, providers)
+        if prefix:
+            hit = index.get(f"{prefix}/{rest}")
             if hit:
                 return hit
 

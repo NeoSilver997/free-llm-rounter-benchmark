@@ -81,6 +81,13 @@ def effective_rpm(limits: Limits, cap: int = 5) -> int:
     return cap
 
 
+def rpm_from_tpm(tpm: int | None, tokens_per_request: int) -> int | None:
+    """Requests per minute implied by a token budget; None when either value is unknown."""
+    if not tpm or tokens_per_request <= 0:
+        return None
+    return max(1, tpm // tokens_per_request)
+
+
 def quota_cost(limits: Limits, requests: int, tokens: int) -> float | None:
     """Share (0..1) of the provider's published daily budget a request consumes.
 
