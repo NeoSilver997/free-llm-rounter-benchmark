@@ -1,0 +1,192 @@
+const show = (v) => (v === null || v === undefined || v === "" ? "unknown" : typeof v === "number" ? v.toFixed(1) : String(v));
+const percent = (v) => (v === null || v === undefined ? "unknown" : (v * 100).toFixed(1) + "%");
+
+const COLUMNS = [
+  "model", "time", "status", "prompt", "reused", "output",
+  "prefill_tps", "decode_tps", "cache_hit_rate", "duration",
+];
+
+async function refreshLog() {
+  const tbody = document.getElementById("log");
+  if (!tbody) return;
+
+  const data = await fetch("/api/log?limit=10").then((r) => r.json());
+  tbody.innerHTML = "";
+
+  for (const e of data.entries) {
+    const tr = document.createElement("tr");
+    const cells = [
+      e.model, e.time, e.status, e.prompt, show(e.reused), e.output,
+      show(e.prefill_tps), show(e.decode_tps), percent(e.cache_hit_rate), `${show(e.duration_ms)} ms`,
+    ];
+    cells.forEach((value, i) => {
+      const td = document.createElement("td");
+      if (i === 3 || i === 5) td.className = "clip";
+      if (i === 2) td.className = `status ${e.outcome}`;
+      td.textContent = value || "unknown";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  }
+}
+
+function matches(tr, needle) {
+  return (
+    tr.dataset.key.toLowerCase().includes(needle) ||
+    tr.dataset.provider.toLowerCase().includes(needle) ||
+    tr.textContent.toLowerCase().includes(needle)
+  );
+}
+
+function applyFilter() {
+  const input = document.getElementById("filter");
+  if (!input) return;
+
+  const needle = input.value.trim().toLowerCase();
+  const rows = [...document.querySelectorAll("tr[data-key]")];
+  const visible = rows.filter((tr) => !needle || matches(tr, needle));
+  rows.forEach((tr) => { tr.hidden = !visible.includes(tr); });
+
+  document.querySelectorAll("section.group").forEach((group) => {
+    group.hidden = needle !== "" && ![...group.querySelectorAll("tr[data-key]")].some((tr) => !tr.hidden);
+  });
+
+  const count = document.getElementById("filter-count");
+  if (count) count.textContent = needle ? `${visible.length} of ${rows.length} rows` : `${rows.length} rows`;
+}
+
+function sortRows(th) {
+  const table = th.closest("table");
+  const tbody = table.querySelector("tbody");
+  const rows = [...tbody.querySelectorAll("tr[data-key]")];
+  const column = [...th.parentNode.children].indexOf(th);
+  const dir = th.dataset.dir === "asc" ? "desc" : "asc";
+
+  table.querySelectorAll("th").forEach((header) => {
+    if (header !== th) delete header.dataset.dir;
+  });
+  th.dataset.dir = dir;
+
+  const cell = (tr) => (tr.children[column] ? tr.children[column].textContent.trim() : "");
+  const number = (text) => {
+    // Strict parse: "2026-10-23 09:14:02" must stay text so timestamps sort chronologically.
+    const value = Number(text.replace("%", ""));
+    return text && Number.isFinite(value) ? value : null;
+  };
+
+  rows.sort((a, b) => {
+    const x = cell(a);
+    const y = cell(b);
+    const nx = number(x);
+    const ny = number(y);
+    if (nx === null && ny === null) return x.localeCompare(y) * (dir === "asc" ? 1 : -1);
+    if (nx === null) return 1;  // unmeasured values always sort last
+    if (ny === null) return -1;
+    return (nx - ny) * (dir === "asc" ? 1 : -1);
+  });
+  rows.forEach((tr) => tbody.appendChild(tr));
+}
+
+async function retest(button) {
+  const tr = button.closest("tr[data-key]");
+  const status = tr.querySelector(".retest-status");
+  button.disabled = true;
+  if (status) status.textContent = "running…";
+
+  try {
+    const res = await fetch("/api/retest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_key: tr.dataset.key }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.attempt) {
+      if (status) status.textContent = (data.error && data.error.message) || `retest failed: ${res.status}`;
+      return;
+    }
+
+    const attempt = data.attempt;
+    const detail = `${attempt.outcome}${attempt.error_class && attempt.error_class !== "ok" ? ` · ${attempt.error_class}` : ""} · ${attempt.latency_ms ?? "unknown"} ms`;
+    if (status) status.textContent = `${attempt.run_at} · ${detail}`;
+
+    // The config row shows the most recent attempt, so it reflects the new one.
+    const last = tr.querySelector(".last-result");
+    if (last) {
+      last.className = `status last-result ${attempt.outcome}`;
+      last.textContent = detail;
+    }
+  } catch (err) {
+    if (status) status.textContent = `retest failed: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function saveConfig() {
+  const status = document.getElementById("save-status");
+  const providers = [...document.querySelectorAll("section.group")].map((group) => ({
+    provider: group.dataset.provider,
+    api_key: group.querySelector(".provider-key").value.trim(),
+    tpm: Number(group.querySelector(".tpm").value) || 0,
+  }));
+  const models = [...document.querySelectorAll("tr[data-key]")].map((tr) => ({
+    model_key: tr.dataset.key,
+    host: tr.querySelector(".host").value.trim(),
+    keyword: tr.querySelector(".keyword").value.trim(),
+    api_key: tr.querySelector(".key").value.trim(),
+    selected: tr.querySelector(".sel").checked,
+  }));
+
+  try {
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_host: document.getElementById("api_host").value.trim(),
+        api_key: document.getElementById("api_key").value.trim(),
+        providers,
+        models,
+      }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      if (status) status.textContent = `save failed: ${(data.error && data.error.message) || res.status}`;
+      return;
+    }
+
+    // Keys are runtime-only, so the source only changes for this process.
+    document.querySelectorAll("section.group").forEach((group) => {
+      const providerKey = group.querySelector(".provider-key").value.trim();
+      group.querySelectorAll("tr[data-key]").forEach((tr) => {
+        const source = tr.querySelector(".source");
+        if (!source) return;
+        if (tr.querySelector(".key").value.trim()) source.textContent = "runtime";
+        else if (providerKey) source.textContent = "provider";
+      });
+    });
+
+    if (status) status.textContent = `saved ${data.saved ? data.models : 0} models`;
+  } catch (err) {
+    if (status) status.textContent = `save failed: ${err.message}`;
+  }
+}
+
+if (document.getElementById("log")) {
+  refreshLog();
+  setInterval(refreshLog, 5000);
+}
+
+const saveButton = document.getElementById("save");
+if (saveButton) saveButton.addEventListener("click", saveConfig);
+
+const filterInput = document.getElementById("filter");
+if (filterInput) {
+  filterInput.addEventListener("input", applyFilter);
+  applyFilter();
+}
+
+document.querySelectorAll("th[data-sort]").forEach((th) => th.addEventListener("click", () => sortRows(th)));
+
+document.querySelectorAll("button.retest").forEach((button) => button.addEventListener("click", () => retest(button)));

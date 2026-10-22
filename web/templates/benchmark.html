@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h1>Benchmark</h1>
+  <div class="row">
+    <label>Filter <input id="filter" size="34" placeholder="model, provider, category, task type"></label>
+    <span id="filter-count" class="note"></span>
+  </div>
+  <p class="note">Last run: <strong>{{ last_run or 'unknown' }}</strong> · {{ rows|length }} recorded attempts
+    in <code>results/results.csv</code>.</p>
+  <p class="note">Retest sends the probe prompt <code>{{ probe_prompt }}</code> (no checks, so it records
+    reachability and latency only) and appends one attempt.</p>
+  {% if scores %}
+  <table>
+    <thead>
+      <tr>
+        <th data-sort>Model</th><th data-sort>Category</th><th data-sort>Pass rate</th><th data-sort>Scored n</th>
+        <th data-sort>p50 ms</th><th data-sort>p95 ms</th><th data-sort>tok/s</th><th data-sort>Errors</th>
+        <th data-sort>Quota cost</th><th data-sort>Coverage</th><th>Retest</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in scores %}
+      <tr class="{{ 'frontier' if m.frontier else '' }}" data-key="{{ m.key }}" data-provider="{{ m.provider }}">
+        <td><code>{{ m.key }}</code></td>
+        <td>{{ m.category }}</td>
+        <td>{{ pct(m.pass_rate) }}</td>
+        <td>{{ 'ranked' if m.scored_n >= min_n else 'coverage only' }}</td>
+        <td>{{ fmt(m.p50_ms) }}</td>
+        <td>{{ fmt(m.p95_ms) }}</td>
+        <td>{{ fmt(m.tokens_per_sec) }}</td>
+        <td>{{ pct(m.error_rate) }}</td>
+        <td>{{ fmt(m.quota_cost) }}</td>
+        <td>{{ m.coverage|join(', ') or 'none' }}</td>
+        <td><button class="retest">Retest</button> <span class="note retest-status"></span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="note">Rows below the min-n gate ({{ min_n }}) are coverage-only and are never ranked. Quota cost is the
+    share of the daily free budget consumed; it stays unknown when the provider publishes no measurable budget.</p>
+  {% else %}
+  <p class="note">No benchmark results yet. Run <code>python cli.py bench</code> to produce
+    <code>results/scores.json</code>.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Result list</h2>
+  {% if rows %}
+  <table>
+    <thead>
+      <tr><th data-sort>Model</th><th data-sort>Run time</th><th data-sort>Task</th><th data-sort>Type</th><th data-sort>Outcome</th>
+          <th data-sort>Latency</th><th data-sort>TTFT</th><th data-sort>Prompt tok</th><th data-sort>Output tok</th>
+          <th data-sort>tok/s</th><th data-sort>Status</th><th data-sort>Rate limit</th><th>Retest</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows[-50:] %}
+      <tr data-key="{{ r.model_key }}" data-provider="{{ r.model_key.split('/', 1)[0] }}">
+        <td><code>{{ r.model_key }}</code></td>
+        <td>{{ r.run_at or 'unknown' }}</td>
+        <td>{{ r.task_id }}</td>
+        <td>{{ r.task_type }}</td>
+        <td class="status {{ r.outcome }}">{{ r.outcome }}</td>
+        <td>{{ r.latency_ms or 'unknown' }}</td>
+        <td>{{ r.ttft_ms or 'unknown' }}</td>
+        <td>{{ r.prompt_tokens or 'unknown' }}</td>
+        <td>{{ r.completion_tokens or 'unknown' }}</td>
+        <td>{{ r.tokens_per_sec or 'unknown' }}</td>
+        <td>{{ r.error_class }}</td>
+        <td>{{ r.rate_limit or 'unknown' }}</td>
+        <td><button class="retest">Retest</button> <span class="note retest-status"></span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="note">No recorded attempts (<code>results/results.csv</code> is empty).</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Prompts</h2>
+  <p class="note">Probe prompt (used by Retest and <code>cli.py probe</code>): <code>{{ probe_prompt }}</code>
+    — no checks, unscored.</p>
+  <table>
+    <thead><tr><th>Task</th><th>Type</th><th>Prompt</th><th>Checks</th></tr></thead>
+    <tbody>
+      {% for t in tasks %}
+      <tr>
+        <td>{{ t.id }}</td>
+        <td>{{ t.task_type }}</td>
+        <td><code>{{ t.prompt }}</code></td>
+        <td>{{ t.checks|map(attribute='type')|list|join(', ') or 'none' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

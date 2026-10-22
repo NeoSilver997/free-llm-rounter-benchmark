@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h1>Model config</h1>
+  <div class="row">
+    <label>API host <input id="api_host" value="{{ config.api_host }}" size="30"></label>
+    <label>Global API key <input id="api_key" value="{{ config.api_key }}" size="30" placeholder="used when no provider key"></label>
+    <button id="save">Save</button>
+    <span id="save-status" class="note"></span>
+  </div>
+  <p class="note">
+    Host, keyword and TPM are persisted to <code>ui_config.json</code>. Keys resolve in order: model key → provider key
+    → env (<code>ROUTER_KEY_&lt;SLUG&gt;</code> / <code>LLM_ROUTER_KEYS</code>) → global key. Keys typed here apply to
+    this process only and are never written to disk, so they are lost on restart.
+  </p>
+  <p class="note">
+    Last result is the most recent attempt per model from <code>results/results.csv</code> —
+    {{ tested }} of {{ config.models|length }} models have a recorded result.
+  </p>
+  <p class="note">
+    Retest sends the probe prompt <code>{{ probe_prompt }}</code> to one model with its configured host and key,
+    appends the attempt to <code>results/results.csv</code> and refreshes the scores.
+  </p>
+
+  <div class="row">
+    <label>Filter <input id="filter" size="30" placeholder="provider or model key"></label>
+    <span id="filter-count" class="note"></span>
+  </div>
+
+  {% for group in groups %}
+  <section class="group" data-provider="{{ group.provider }}">
+    <div class="row">
+      <strong>Provider: {{ group.provider }}</strong>
+      <span class="note">{{ group.category }} · {{ group.rows|length }} models · {{ group.summary or "no result" }}</span>
+      <label>Provider key <input class="provider-key" data-provider="{{ group.provider }}" size="24" placeholder="{{ group.masked }}" value="{{ config.provider_keys.get(group.provider, '') }}"></label>
+      <label>TPM <input class="tpm" data-provider="{{ group.provider }}" size="6" value="{{ group.tpm }}"></label>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Use</th><th>Model key</th><th>Host</th><th>Keyword</th><th>API key</th><th>Source</th><th>Last result</th><th>Retest</th></tr>
+      </thead>
+      <tbody>
+        {% for row in group.rows %}
+        <tr data-key="{{ row.model.model_key }}" data-provider="{{ group.provider }}">
+          <td><input type="checkbox" class="sel" {% if row.model.selected %}checked{% endif %}></td>
+          <td class="clip"><code>{{ row.model.model_key }}</code></td>
+          <td><input class="host" value="{{ row.model.host }}" placeholder="{{ row.default_host }}"></td>
+          <td><input class="keyword" value="{{ row.model.keyword }}"></td>
+          <td><input class="key" value="{{ row.model.api_key }}" placeholder="{{ row.masked }}"></td>
+          <td class="source">{{ row.source }}</td>
+          <td class="status last-result {{ row.last.outcome if row.last else 'skipped' }}">
+            {% if row.last %}
+              {{ row.last.outcome }}{% if row.last.error_class and row.last.error_class != "ok" %} · {{ row.last.error_class }}{% endif %} · {{ row.last.latency_ms or "unknown" }} ms
+            {% else %}not tested{% endif %}
+          </td>
+          <td><button class="retest">Retest</button> <span class="note retest-status"></span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endfor %}
+</section>
+{% endblock %}

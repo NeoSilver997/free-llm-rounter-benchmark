@@ -5,3 +5,6 @@ results/
 answers.jsonl
 .env
 .venv/
+ui_config.json
+ui_log.jsonl
+routes.jsonl

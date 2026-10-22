@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h1>Gateway</h1>
+  <dl class="kv">
+    <dt>API host</dt><dd><code>{{ config.api_host }}</code></dd>
+    <dt>API key</dt><dd>{{ config.api_key or "from env" }}</dd>
+    <dt>Selected models</dt><dd>{{ selected|length }} of {{ config.models|length }}</dd>
+    <dt>Requests</dt>
+    <dd>{{ stats.n }} · p50 {{ fmt(stats.p50_ms) }} ms · p95 {{ fmt(stats.p95_ms) }} ms
+        {% for outcome, n in stats.outcomes.items() %} · {{ outcome }} {{ n }}{% endfor %}</dd>
+  </dl>
+  <p class="note">Selected list is editable on <a href="/config">Model config</a>. Keys default to <code>ROUTER_KEY_&lt;SLUG&gt;</code>.</p>
+</section>
+
+<section class="card">
+  <h2>Last 10 requests</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Model</th><th>Time</th><th>Status</th><th>Prompt</th><th>Reused</th><th>Output</th>
+        <th>Prefill t/s</th><th>Decode t/s</th><th>VRAM hit rate</th><th>Duration</th>
+      </tr>
+    </thead>
+    <tbody id="log">
+      {% for e in entries %}
+      <tr>
+        <td><code>{{ e.model or "unknown" }}</code></td>
+        <td>{{ e.time }}</td>
+        <td class="status {{ e.outcome }}">{{ e.status or "unknown" }}</td>
+        <td class="clip">{{ e.prompt or "unknown" }}</td>
+        <td>{{ fmt(e.reused) }}</td>
+        <td class="clip">{{ e.output or "unknown" }}</td>
+        <td>{{ fmt(e.prefill_tps) }}</td>
+        <td>{{ fmt(e.decode_tps) }}</td>
+        <td>{{ pct(e.cache_hit_rate) }}</td>
+        <td>{{ fmt(e.duration_ms) }} ms</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not entries %}<p class="note">No requests yet. Send one: <code>POST /v1/chat/completions</code>.</p>{% endif %}
+  <p class="note">
+    Prefill/decode split needs time-to-first-token (streaming). Decode falls back to the whole call when TTFT is
+    unavailable. VRAM hit rate is the prompt-cache hit rate reported by the upstream; both stay
+    <em>unknown</em> when the provider does not report them.
+  </p>
+</section>
+{% endblock %}

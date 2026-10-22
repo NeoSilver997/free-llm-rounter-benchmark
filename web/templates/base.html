@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}LLM Router{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav>
+    <strong>LLM Router</strong>
+    <a href="/" class="{{ 'on' if active == 'home' else '' }}">Home</a>
+    <a href="/config" class="{{ 'on' if active == 'config' else '' }}">Model config</a>
+    <a href="/benchmark" class="{{ 'on' if active == 'benchmark' else '' }}">Benchmark</a>
+  </nav>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
