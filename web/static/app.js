@@ -8,6 +8,14 @@ const COLUMNS = [
   "prefill_tps", "decode_tps", "cache_hit_rate", "duration",
 ];
 
+function toggleDetail(row, open) {
+  const detail = detailFor(row);
+  if (!detail) return null;
+  detail.hidden = !open;
+  row.setAttribute("aria-expanded", String(open));
+  return detail;
+}
+
 function detailRow(entry, open) {
   const tr = document.createElement("tr");
   tr.className = "detail";
@@ -50,6 +58,8 @@ async function refreshLog() {
   const limit = Number(tbody.dataset.limit) || LOG_LIMIT;
   // The rebuild replaces every row, so the open state has to be carried across by entry time.
   const open = new Set([...tbody.querySelectorAll("tr.detail")].filter((tr) => !tr.hidden).map((tr) => tr.dataset.time));
+  // Focus is on a row element that is about to be discarded, so remember which row it was.
+  const focused = document.activeElement && document.activeElement.classList.contains("req") ? document.activeElement.dataset.time : null;
 
   const data = await fetch(`/api/log?limit=${limit}`).then((r) => r.json());
   tbody.innerHTML = "";
@@ -58,6 +68,8 @@ async function refreshLog() {
     const tr = document.createElement("tr");
     tr.className = "req";
     tr.dataset.time = e.time;
+    tr.tabIndex = 0;
+    tr.setAttribute("aria-expanded", String(open.has(e.time)));
 
     const cells = [
       e.model, e.time, e.status, e.prompt, show(e.reused), e.output,
@@ -72,6 +84,11 @@ async function refreshLog() {
     });
 
     tbody.append(tr, detailRow(e, open.has(e.time)));
+  }
+
+  if (focused) {
+    const row = tbody.querySelector(`tr.req[data-time="${focused}"]`);
+    if (row) row.focus();  // keep the keyboard user's place across the rebuild
   }
 }
 
@@ -117,6 +134,8 @@ function sortRows(th) {
     if (header !== th) delete header.dataset.dir;
   });
   th.dataset.dir = dir;
+  table.querySelectorAll("th[data-sort]").forEach((header) => header.removeAttribute("aria-sort"));
+  th.setAttribute("aria-sort", dir === "asc" ? "ascending" : "descending");
 
   const cell = (tr) => (tr.children[column] ? tr.children[column].textContent.trim() : "");
   const number = (text) => {
@@ -229,15 +248,24 @@ async function saveConfig() {
   }
 }
 
-if (document.getElementById("log")) {
+const logBody = document.getElementById("log");
+if (logBody) {
   refreshLog();
   setInterval(refreshLog, 5000);
 
-  document.getElementById("log").addEventListener("click", (event) => {
+  const toggleFrom = (event) => {
     const row = event.target.closest("tr.req");
-    if (!row) return;
-    const detail = detailFor(row);
-    if (detail) detail.hidden = !detail.hidden;
+    const detail = row && detailFor(row);
+    if (!detail) return;
+    toggleDetail(row, detail.hidden);
+  };
+
+  logBody.addEventListener("click", toggleFrom);
+  // Rows are focusable, so the same toggle has to work from the keyboard.
+  logBody.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    toggleFrom(event);
   });
 }
 
@@ -250,6 +278,16 @@ if (filterInput) {
   applyFilter();
 }
 
-document.querySelectorAll("th[data-sort]").forEach((th) => th.addEventListener("click", () => sortRows(th)));
+document.querySelectorAll("th[data-sort]").forEach((th) => {
+  th.tabIndex = 0;
+  const activate = () => sortRows(th);
+  th.addEventListener("click", activate);
+  // A header is only sortable from the keyboard if it can be focused and activated.
+  th.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    activate();
+  });
+});
 
 document.querySelectorAll("button.retest").forEach((button) => button.addEventListener("click", () => retest(button)));

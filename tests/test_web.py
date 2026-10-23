@@ -207,6 +207,14 @@ def test_detail_rows_are_paired_with_their_request_row(client):
     ]
 
 
+def test_request_rows_are_keyboard_operable(client):
+    server.LOG.record(LogEntry(time="2026-10-23T00:00:00Z", model="groq/x", status="ok", prompt="p", output="o", outcome="pass", duration_ms=100))
+
+    row = re.search(r'<tr class="req"[^>]*>', client.get("/").text).group(0)
+    # app.js toggles the detail row from the keyboard, which only works on a focusable row.
+    assert 'tabindex="0"' in row and 'aria-expanded="false"' in row
+
+
 def test_capped_text_is_flagged_so_the_detail_view_admits_it_is_partial(client):
     client.post("/v1/chat/completions", json={"model": "auto", "messages": [{"role": "user", "content": "z" * (MAX_TEXT + 50)}]})
 

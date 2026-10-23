@@ -24,7 +24,7 @@
     </thead>
     <tbody id="log" data-limit="{{ limit }}">
       {% for e in entries %}
-      <tr class="req" data-time="{{ e.time }}">
+      <tr class="req" data-time="{{ e.time }}" tabindex="0" aria-expanded="false">
         <td><code>{{ e.model or "unknown" }}</code></td>
         <td>{{ e.time }}</td>
         <td class="status {{ e.outcome }}">{{ e.status or "unknown" }}</td>
@@ -47,7 +47,7 @@
     </tbody>
   </table>
   {% if not entries %}<p class="note">No requests yet. Send one: <code>POST /v1/chat/completions</code>.</p>{% endif %}
-  <p class="note">Click a row to open the full prompt and output. The log keeps the last {{ limit }} requests in the page buffer
+  <p class="note">Click a row, or press Enter on a focused row, to open the full prompt and output. The log keeps the last {{ limit }} requests in the page buffer
     (<code>ui_log.jsonl</code> holds every recorded request).</p>
   <p class="note">
     Prefill/decode split needs time-to-first-token (streaming). Decode falls back to the whole call when TTFT is

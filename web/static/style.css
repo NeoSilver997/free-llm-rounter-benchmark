@@ -47,6 +47,7 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 th[data-sort] { cursor: pointer; }
+th[data-sort]:focus { outline: 1px solid var(--accent); outline-offset: -1px; }
 th[data-sort]:hover { color: var(--accent); }
 th[data-dir] { color: var(--accent); }
 th[data-dir="asc"]::after { content: " ↑"; }
@@ -57,6 +58,8 @@ tr.frontier td { background: rgba(90, 169, 230, 0.08); }
 tr[hidden] { display: none; }
 tr.req { cursor: pointer; }
 tr.req:hover td { background: rgba(90, 169, 230, 0.06); }
+tr.req:focus { outline: 1px solid var(--accent); outline-offset: -1px; }
+tr.req[aria-expanded="true"] td { background: rgba(90, 169, 230, 0.12); }
 tr.detail td { background: #101417; }
 .detail-block { margin-bottom: 0.5rem; }
 .detail-label { display: block; color: var(--muted); margin-bottom: 0.25rem; }
