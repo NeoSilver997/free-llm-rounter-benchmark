@@ -4,13 +4,13 @@ Run: `python -m pytest -q --basetemp=C:\AI_Server\pytest-tmp -p no:cacheprovider
 Environment: Python 3.14.0, pytest 9.1.1, pytest-asyncio 1.4.0 (strict mode, no pytest config), httpx.
 No network calls — adapters run through `httpx.MockTransport`.
 
-**Result: 67 passed, 0 failed (1.83 s).**
+**Result: 68 passed, 0 failed (1.87 s).**
 
 | Module | Tests | Result |
 | --- | --- | --- |
 | `tests/test_routing.py` | 24 | 24 passed |
 | `tests/test_benchmark.py` | 21 | 21 passed |
-| `tests/test_web.py` | 22 | 22 passed |
+| `tests/test_web.py` | 23 | 23 passed |
 
 ## Coverage against the plan's Verification item 2
 
@@ -115,9 +115,12 @@ Fixed and re-verified in the browser:
 3. **Silent truncation** — `LogEntry.truncated` is a property. As a method the home template read a bound method, which is always truthy, so every row claimed `text capped`; now the note appears only when the stored text hit `MAX_TEXT`. Verified live: a 2050-char prompt stored at 2000, and the page showed exactly one `text capped` note.
 4. **Client and page disagreed on the limit** — the client reads `data-limit` from the tbody instead of hardcoding 100.
 
-Still open from the review: detail rows are rendered eagerly for all 100 entries (about 400 KB per refresh), the Jinja and JS formatters differ (`fmt` prints `120`, `show` prints `120.0`), and the detail rows have no keyboard access or `aria-expanded`.
+5. **Rows and sortable headers were mouse-only** — request rows carry `tabindex`/`aria-expanded` and toggle on Enter or Space; sortable headers are focusable and activate from the keyboard; `aria-sort` reports the current direction. Verified live: Enter and Space both opened a detail row, and Enter on `p50 ms` sorted ascending with unmeasured values last.
+6. **Focus was dropped on every refresh** — the rebuild discards the focused row, so `refreshLog()` now re-applies focus to the same entry. Verified: focus survived a 5 s refresh with the detail row still open.
+7. **Favicon 404 in the console** — every page requested `/favicon.ico` and logged an error; `base.html` declares an empty icon, and the console is now clean.
+
+Still open from the review: detail rows are rendered eagerly for all 100 entries (about 400 KB per refresh), and the Jinja and JS formatters differ (`fmt` prints `120`, `show` prints `120.0`).
 
 ## Still open
 
 - Live verification item 8 (`serve` + OpenAI SDK call with `model=auto:text`) was verified manually earlier; it is not part of this offline suite.
-- Uncommitted: the UI review fixes (`web/static/app.js`, `web/templates/home.html`, `request_log.py`) and the two new tests in `tests/test_web.py`.
