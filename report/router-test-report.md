@@ -4,13 +4,13 @@ Run: `python -m pytest -q --basetemp=C:\AI_Server\pytest-tmp -p no:cacheprovider
 Environment: Python 3.14.0, pytest 9.1.1, pytest-asyncio 1.4.0 (strict mode, no pytest config), httpx.
 No network calls — adapters run through `httpx.MockTransport`.
 
-**Result: 63 passed, 0 failed (1.67 s).**
+**Result: 67 passed, 0 failed (1.83 s).**
 
 | Module | Tests | Result |
 | --- | --- | --- |
 | `tests/test_routing.py` | 24 | 24 passed |
 | `tests/test_benchmark.py` | 21 | 21 passed |
-| `tests/test_web.py` | 18 | 18 passed |
+| `tests/test_web.py` | 22 | 22 passed |
 
 ## Coverage against the plan's Verification item 2
 
@@ -106,8 +106,18 @@ Caveat: the replay cannot currently discriminate policy quality — every ranked
 1. **Circular import** — importing `telemetry` raised `ImportError: cannot import name 'ALLOWED_REASONS'` (`routing/__init__` → `routing.decision` → `telemetry` → `routing.health`). Fixed in [telemetry.py](file:///c:/AI_Server/ClaudeCode/LLM-Router/telemetry.py#L7-L33) by defining the allowlists before the `routing.health` import.
 2. **Constraint-order assertion** — the test expected `task_type` for a keyless code model; the actual order records `no_key` first. Assertion corrected to match the documented order (this is behaviour, not a bug).
 
+## UI flow review (live browser, http://127.0.0.1:8010)
+
+Fixed and re-verified in the browser:
+
+1. **Open detail row lost on every refresh** — `refreshLog()` rebuilds the tbody, so the open state now travels by `data-time`. Verified: open before and after a 5 s refresh, and the detail row is still adjacent to its request row.
+2. **Filter and sort could separate a detail row from its request row** — both now handle the pair as one unit. Verified on `/benchmark`: sort then filter, no row whose detail state disagreed with its request row.
+3. **Silent truncation** — `LogEntry.truncated` is a property. As a method the home template read a bound method, which is always truthy, so every row claimed `text capped`; now the note appears only when the stored text hit `MAX_TEXT`. Verified live: a 2050-char prompt stored at 2000, and the page showed exactly one `text capped` note.
+4. **Client and page disagreed on the limit** — the client reads `data-limit` from the tbody instead of hardcoding 100.
+
+Still open from the review: detail rows are rendered eagerly for all 100 entries (about 400 KB per refresh), the Jinja and JS formatters differ (`fmt` prints `120`, `show` prints `120.0`), and the detail rows have no keyboard access or `aria-expanded`.
+
 ## Still open
 
 - Live verification item 8 (`serve` + OpenAI SDK call with `model=auto:text`) was verified manually earlier; it is not part of this offline suite.
-- Browser check of `/config` and `/benchmark` is blocked by the Chrome DevTools MCP profile lock.
-- Uncommitted: `tests/test_routing.py`, the `telemetry.py` reorder, and the SDK-example fixes (`server.py`, `providers/openai_adapter.py`, `catalog/data.json`, `tests/test_web.py`, `tests/test_benchmark.py`).
+- Uncommitted: the UI review fixes (`web/static/app.js`, `web/templates/home.html`, `request_log.py`) and the two new tests in `tests/test_web.py`.

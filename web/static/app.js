@@ -8,10 +8,11 @@ const COLUMNS = [
   "prefill_tps", "decode_tps", "cache_hit_rate", "duration",
 ];
 
-function detailRow(entry) {
+function detailRow(entry, open) {
   const tr = document.createElement("tr");
   tr.className = "detail";
-  tr.hidden = true;
+  tr.dataset.time = entry.time;  // pairs with the request row and survives a refresh
+  tr.hidden = !open;
 
   const td = document.createElement("td");
   td.colSpan = COLUMNS.length;
@@ -30,18 +31,27 @@ function detailRow(entry) {
 
   const meta = document.createElement("p");
   meta.className = "note";
-  meta.textContent = `route ${entry.route_reason || "unknown"} · outcome ${entry.outcome} · ttft ${show(entry.ttft_ms)} ms`;
+  meta.textContent = `route ${entry.route_reason || "unknown"} · outcome ${entry.outcome} · ttft ${show(entry.ttft_ms)} ms${entry.truncated ? " · text capped" : ""}`;
   td.appendChild(meta);
 
   tr.appendChild(td);
   return tr;
 }
 
+function detailFor(row) {
+  const detail = row.nextElementSibling;
+  return detail && detail.classList.contains("detail") ? detail : null;
+}
+
 async function refreshLog() {
   const tbody = document.getElementById("log");
   if (!tbody) return;
 
-  const data = await fetch(`/api/log?limit=${LOG_LIMIT}`).then((r) => r.json());
+  const limit = Number(tbody.dataset.limit) || LOG_LIMIT;
+  // The rebuild replaces every row, so the open state has to be carried across by entry time.
+  const open = new Set([...tbody.querySelectorAll("tr.detail")].filter((tr) => !tr.hidden).map((tr) => tr.dataset.time));
+
+  const data = await fetch(`/api/log?limit=${limit}`).then((r) => r.json());
   tbody.innerHTML = "";
 
   for (const e of data.entries) {
@@ -61,7 +71,7 @@ async function refreshLog() {
       tr.appendChild(td);
     });
 
-    tbody.append(tr, detailRow(e));
+    tbody.append(tr, detailRow(e, open.has(e.time)));
   }
 }
 
@@ -80,7 +90,12 @@ function applyFilter() {
   const needle = input.value.trim().toLowerCase();
   const rows = [...document.querySelectorAll("tr[data-key]")];
   const visible = rows.filter((tr) => !needle || matches(tr, needle));
-  rows.forEach((tr) => { tr.hidden = !visible.includes(tr); });
+  rows.forEach((tr) => {
+    const hide = !visible.includes(tr);
+    tr.hidden = hide;
+    const detail = detailFor(tr);
+    if (detail) detail.hidden = hide;  // a detail row never outlives its request row
+  });
 
   document.querySelectorAll("section.group").forEach((group) => {
     group.hidden = needle !== "" && ![...group.querySelectorAll("tr[data-key]")].some((tr) => !tr.hidden);
@@ -94,6 +109,7 @@ function sortRows(th) {
   const table = th.closest("table");
   const tbody = table.querySelector("tbody");
   const rows = [...tbody.querySelectorAll("tr[data-key]")];
+  const pairs = rows.map((tr) => [tr, detailFor(tr)]);
   const column = [...th.parentNode.children].indexOf(th);
   const dir = th.dataset.dir === "asc" ? "desc" : "asc";
 
@@ -109,7 +125,7 @@ function sortRows(th) {
     return text && Number.isFinite(value) ? value : null;
   };
 
-  rows.sort((a, b) => {
+  const compare = (a, b) => {
     const x = cell(a);
     const y = cell(b);
     const nx = number(x);
@@ -118,8 +134,13 @@ function sortRows(th) {
     if (nx === null) return 1;  // unmeasured values always sort last
     if (ny === null) return -1;
     return (nx - ny) * (dir === "asc" ? 1 : -1);
+  };
+
+  pairs.sort((a, b) => compare(a[0], b[0]));
+  pairs.forEach(([tr, detail]) => {
+    tbody.appendChild(tr);
+    if (detail) tbody.appendChild(detail);
   });
-  rows.forEach((tr) => tbody.appendChild(tr));
 }
 
 async function retest(button) {
@@ -215,8 +236,8 @@ if (document.getElementById("log")) {
   document.getElementById("log").addEventListener("click", (event) => {
     const row = event.target.closest("tr.req");
     if (!row) return;
-    const detail = row.nextElementSibling;
-    if (detail && detail.classList.contains("detail")) detail.hidden = !detail.hidden;
+    const detail = detailFor(row);
+    if (detail) detail.hidden = !detail.hidden;
   });
 }
 

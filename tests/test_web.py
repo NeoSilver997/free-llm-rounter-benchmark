@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime
 
 import httpx
@@ -17,7 +18,7 @@ from catalog.rate_limits import rpm_from_tpm
 import config as config_module
 from config import AppConfig, ModelConfig, env_keys, load_config, save_config
 from providers.registry import adapter_for
-from request_log import LogEntry, RequestLog, derive_metrics
+from request_log import MAX_TEXT, LogEntry, RequestLog, derive_metrics
 
 
 def groq_key() -> str:
@@ -190,6 +191,36 @@ def test_home_page_keeps_last_100_and_renders_detail(client):
     # The limit is still adjustable and capped by the buffer size.
     assert client.get("/?limit=10").text.count('class="detail"') == 10
     assert client.get("/?limit=9999").text.count('class="detail"') == 100
+
+
+def test_detail_rows_are_paired_with_their_request_row(client):
+    times = [f"2026-10-23T00:00:0{i}Z" for i in range(3)]
+    for t in times:
+        server.LOG.record(LogEntry(time=t, model="groq/x", status="ok", prompt="p", output="o", outcome="pass", duration_ms=100))
+
+    page = client.get("/").text
+    # The client pairs each request row with the row directly after it, so render order is the contract.
+    tbody = page.split('<tbody id="log" data-limit="100">')[1].split("</tbody>")[0]
+    order = re.findall(r'<tr class="(req|detail)" data-time="([^"]+)"', tbody)
+    assert order == [
+        pair for t in reversed(times) for pair in (("req", t), ("detail", t))
+    ]
+
+
+def test_capped_text_is_flagged_so_the_detail_view_admits_it_is_partial(client):
+    client.post("/v1/chat/completions", json={"model": "auto", "messages": [{"role": "user", "content": "z" * (MAX_TEXT + 50)}]})
+
+    entry = client.get("/api/log").json()["entries"][0]
+    assert len(entry["prompt"]) == MAX_TEXT and entry["truncated"] is True
+
+    page = client.get("/").text
+    assert "text capped" in page
+
+    # A short request has nothing to admit.
+    server.LOG.entries.clear()
+    client.post("/v1/chat/completions", json={"model": "auto", "messages": [{"role": "user", "content": "Reply with exactly: PONG"}]})
+    assert client.get("/api/log").json()["entries"][0]["truncated"] is False
+    assert "text capped" not in client.get("/").text
 
 
 def test_chat_records_the_request(client):

@@ -47,12 +47,22 @@ class LogEntry:
     route_reason: str = ""
     outcome: str = "error"
 
+    @property
+    def truncated(self) -> bool:
+        """The stored text hit the cap, so the detail view is showing a partial value.
+
+        A property, not a method: the home template reads it as `e.truncated`, and a bound
+        method is always truthy.
+        """
+        return len(self.prompt or "") >= MAX_TEXT or len(self.output or "") >= MAX_TEXT
+
     def as_dict(self) -> dict:
         return {
             "time": self.time,
             "model": self.model,
             "status": self.status,
             "prompt": self.prompt,
+            "truncated": self.truncated,
             "reused": self.reused,
             "output": self.output,
             "prefill_tps": self.prefill_tps,
