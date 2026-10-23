@@ -266,7 +266,7 @@ def serve(port: int = 8000) -> None:
     server.LOG.load()
     import uvicorn
 
-    uvicorn.run(server.app, host="127.0.0.1", port=port)
+    uvicorn.run(server.app, host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":
